@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: teamflow_db2
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: N6N1DD8tUfNb397xoV6C
+      POSTGRES_DB: teamflow
+    volumes:
+      - postgres_data2:/var/lib/postgresql/data
+    networks:
+      - teamflow_network
+
+  web:
+    build: .
+    container_name: teamflow_web
+    restart: always
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://admin:N6N1DD8tUfNb397xoV6C@db:5432/teamflow
+      - OLLAMA_HOST_URL=http://192.168.94.141:11434
+      - GEMINI_API_KEY=AIzaSyCh7CLS3zOQ5ZcBJxEmcAQxElZ5X2s7_7A
+      - MOD=TEST
+    networks:
+      - teamflow_network
+
+  nginx:
+    image: nginx:alpine
+    container_name: teamflow_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /DOCKER/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /DOCKER/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - web
+    networks:
+      - teamflow_network
+
+networks:
+  teamflow_network:
+    driver: bridge
+
+volumes:
+  postgres_data2:

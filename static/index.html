@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeamFlow - Zadania</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .dragging { opacity: 0.4; transform: scale(0.95); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .column-drop-zone { min-height: 150px; transition: background-color 0.2s; }
+        .task-card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .task-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+    </style>
+</head>
+<body class="bg-[#F4F5F7] text-gray-800 h-screen font-sans flex flex-col overflow-hidden">
+
+    <nav class="bg-white px-6 py-3 shadow-sm flex justify-between items-center border-b border-gray-200 z-10">
+        <div class="flex items-center gap-8">
+            <h1 class="text-2xl font-extrabold text-blue-600 flex items-center gap-2 tracking-tight">
+                TeamFlow <span class="bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-blue-200">AI Powered</span>
+            </h1>
+            <div class="hidden md:flex gap-6 text-sm font-semibold text-gray-500 mt-1">
+                <a href="/" class="text-blue-600 border-b-2 border-blue-600 pb-1">Zadania</a>
+                <a href="/calendar.html" class="hover:text-blue-600 transition">Kalendarz</a>
+                <a href="/raport.html" class="hover:text-blue-600 transition">Raporty AI</a>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <button onclick="clearAllTasks()" class="text-sm text-red-500 hover:text-red-700 font-bold transition">Wyczyść wszystkie</button>
+            <div class="w-px h-6 bg-gray-200"></div>
+            <button onclick="logout()" class="text-sm text-gray-500 hover:text-red-600 font-bold transition">Wyloguj</button>
+        </div>
+    </nav>
+
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+        
+        <div class="w-full md:w-80 bg-white border-r border-gray-200 flex flex-col z-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+            <div class="p-5 border-b border-gray-100 bg-slate-50/50">
+                <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                    Inteligentna Skrzynka
+                </h2>
+                <p class="text-xs text-gray-500 mt-1 leading-relaxed">Wklej notatkę ze spotkania lub opisz zadanie. AI automatycznie rozbije je na kroki i ułoży priorytety.</p>
+            </div>
+            
+            <div class="p-5 flex-1 flex flex-col gap-4 bg-white">
+                <textarea id="aiInput" class="w-full flex-1 p-3.5 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 focus:bg-white transition outline-none resize-none text-sm text-gray-700 placeholder-gray-400" placeholder="Np. Trzeba zaktualizować serwery Ubuntu, sprawdzić logi bezpieczeństwa i rotować klucze dostępu do końca tygodnia..."></textarea>
+                
+                <button onclick="sendToAI()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition flex justify-center items-center shadow-md shadow-indigo-200 group">
+                    <span id="aiBtnText" class="flex items-center gap-2 group-hover:scale-105 transition-transform">
+                        Analizuj przez AI
+                    </span>
+                    <svg id="aiLoader" class="hidden animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                </button>
+
+                <div class="relative flex py-2 items-center">
+                    <div class="flex-grow border-t border-gray-200"></div>
+                    <span class="flex-shrink-0 mx-4 text-gray-400 text-xs font-semibold uppercase">LUB</span>
+                    <div class="flex-grow border-t border-gray-200"></div>
+                </div>
+
+                <button onclick="document.getElementById('manualTaskModal').classList.remove('hidden')" class="w-full bg-white border-2 border-gray-200 hover:border-blue-600 hover:text-blue-600 text-gray-600 font-bold py-3 rounded-xl transition flex justify-center items-center shadow-sm">
+                    Dodaj zadanie ręcznie
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-x-auto overflow-y-hidden bg-[#F4F5F7] p-6">
+            <div class="flex gap-5 h-full min-w-max items-start" id="board">
+                </div>
+        </div>
+    </div>
+    
+    <div id="taskModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity">
+        <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] m-4 transform transition-all">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-start bg-slate-50/50">
+                <div>
+                    <span id="modalStatusBadge" class="bg-blue-100 text-blue-800 text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider mb-2 inline-block">Status</span>
+                    <h2 id="modalTitle" class="text-xl font-extrabold text-gray-900 leading-tight">Tytuł zadania</h2>
+                </div>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center transition leading-none">&times;</button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto flex-1 flex flex-col md:flex-row gap-8">
+                <div class="flex-1">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Opis</h3>
+                    <p id="modalDesc" class="text-sm text-gray-700 bg-gray-50/80 p-4 rounded-xl border border-gray-100 mb-6 min-h-[100px] leading-relaxed"></p>
+                    
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Notatki techniczne</h3>
+                    <div id="modalCommentsList" class="space-y-3 mb-4 max-h-48 overflow-y-auto pr-2"></div>
+                    <div class="flex gap-2 bg-gray-50 p-2 rounded-xl border border-gray-200">
+                        <input type="text" id="newCommentText" class="flex-1 px-3 py-2 bg-transparent text-sm focus:outline-none" placeholder="Dodaj notatkę / wynik z terminala...">
+                        <button onclick="addComment()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition">Dodaj</button>
+                    </div>
+                </div>
+
+                <div class="w-full md:w-64 bg-slate-50 p-5 rounded-2xl border border-gray-200 h-fit">
+                    <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">Rejestracja czasu</h3>
+                    
+                    <div class="mb-5 bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Szacowany czas AI (min)</label>
+                        <div id="modalEstTime" class="font-bold text-gray-800 text-lg">0</div>
+                    </div>
+
+                    <div class="mb-5">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Spędzony czas (min)</label>
+                        <input type="number" id="modalLoggedTimeInput" class="w-full p-3 border border-gray-200 rounded-xl text-xl font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 text-center shadow-inner">
+                    </div>
+                    <button onclick="saveTime()" class="w-full bg-gray-900 hover:bg-black text-white py-3 rounded-xl text-sm font-bold shadow-md transition">Aktualizuj czas</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="manualTaskModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-opacity">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+            <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-slate-50/50">
+                <h3 class="font-extrabold text-lg text-gray-900">Nowe zadanie</h3>
+                <button onclick="document.getElementById('manualTaskModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-full w-8 h-8 flex items-center justify-center transition font-bold leading-none">&times;</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Tytuł zadania</label>
+                    <input type="text" id="manualTitle" class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 transition bg-gray-50 focus:bg-white" placeholder="Np. Skonfigurować zaporę sieciową UFW">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Opis / Szczegóły</label>
+                    <textarea id="manualDesc" class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 transition bg-gray-50 focus:bg-white" rows="3" placeholder="Porty do otwarcia, polityki bezpieczeństwa..."></textarea>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Szacowany czas (minuty)</label>
+                    <input type="number" id="manualTime" class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 transition bg-gray-50 focus:bg-white font-bold text-gray-700" value="60">
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-100 bg-slate-50 flex justify-end gap-3">
+                <button onclick="document.getElementById('manualTaskModal').classList.add('hidden')" class="px-4 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-200 transition">Anuluj</button>
+                <button onclick="createManualTask()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-xl font-bold text-sm shadow-md shadow-green-200 transition">Zapisz zadanie</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/config.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/board.js"></script>
+</body>
+</html>

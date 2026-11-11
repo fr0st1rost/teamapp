@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Chrome Dino Arcade</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        body {
+            margin: 0;
+            padding: 0;
+            background: #f7f7f7;
+            font-family: 'Press Start 2P', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+        #gameContainer {
+            position: relative;
+            width: 600px;
+            height: 150px;
+        }
+        canvas {
+            display: block;
+            background: #f7f7f7;
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="dinoCanvas" width="600" height="150"></canvas>
+</div>
+
+<script>
+const canvas = document.getElementById('dinoCanvas');
+const ctx = canvas.getContext('2d');
+
+// Глобальные настройки аркады
+let gameSpeed = 5.5;
+let gravity = 0.6;
+let score = 0;
+let highScore = localStorage.getItem('dino_arcade_high') || 0;
+let isGameOver = false;
+let obstacles = [];
+let clouds = [];
+let gameFrame = 0;
+
+// Улучшенный объект Динозавра с анимацией шага и проработанным спрайтом
+const dino = {
+    x: 50,
+    y: 100,
+    w: 24,
+    h: 26,
+    vy: 0,
+    isJumping: false,
+    legToggle: false,
+    
+    draw() {
+        ctx.fillStyle = '#535353';
+        const cx = this.x;
+        const cy = this.y;
+
+        // Корпус и хвост
+        ctx.fillRect(cx + 4, cy + 2, 14, 14);
+        ctx.fillRect(cx, cy + 6, 4, 6); // Хвост
+        
+        // Шея и голова
+        ctx.fillRect(cx + 12, cy, 12, 6);
+        ctx.fillRect(cx + 14, cy - 8, 14, 8); // Морда
+        
+        // Глаз
+        ctx.fillStyle = '#f7f7f7';
+        ctx.fillRect(cx + 18, cy - 6, 2, 2);
+        
+        // Передние лапки
+        ctx.fillStyle = '#535353';
+        ctx.fillRect(cx + 22, cy + 4, 4, 2);
+
+        // Анимация бега (переключение ног каждые несколько кадров)
+        if (this.isJumping) {
+            ctx.fillRect(cx + 6, cy + 16, 3, 4);
+            ctx.fillRect(cx + 12, cy + 16, 3, 4);
+        } else {
+            if (gameFrame % 6 === 0) this.legToggle = !this.legToggle;
+            if (this.legToggle) {
+                ctx.fillRect(cx + 6, cy + 16, 3, 4); // Нога 1 опущена
+                ctx.fillRect(cx + 12, cy + 16, 3, 2); // Нога 2 поднята
+            } else {
+                ctx.fillRect(cx + 6, cy + 16, 3, 2);
+                ctx.fillRect(cx + 12, cy + 16, 3, 4);
+            }
+        }
+    },
+    jump() {
+        if (!this.isJumping) {
+            this.vy = -9.5;
+            this.isJumping = true;
+        }
+    },
+    update() {
+        this.vy += gravity;
+        this.y += this.vy;
+        if (this.y > 100) {
+            this.y = 100;
+            this.vy = 0;
+            this.isJumping = false;
+        }
+    }
+};
+
+// Процедурные пиксельные Облака для бэкграунда
+class Cloud {
+    constructor() {
+        this.x = 620;
+        this.y = Math.random() * 40 + 20;
+        this.speed = 0.5;
+        this.w = 40;
+    }
+    draw() {
+        ctx.fillStyle = '#dcdcdc';
+        ctx.fillRect(this.x + 10, this.y, 20, 8);
+        ctx.fillRect(this.x, this.y + 4, 40, 8);
+    }
+    update() {
+        this.x -= this.speed;
+    }
+}
+
+// Препятствия: Классические кактусы и Птеродактили
+class Obstacle {
+    constructor() {
+        this.x = 620;
+        const typeRand = Math.random();
+        
+        if (score > 400 && typeRand < 0.25) {
+            // 1. Птеродактиль (появляется при счете > 400)
+            this.type = 'bird';
+            this.y = Math.random() > 0.5 ? 75 : 95; // два уровня высоты
+            this.w = 22;
+            this.h = 15;
+            this.wingToggle = false;
+        } else {
+            // 2. Стабильные типы Кактусов (убираем галлюцинации)
+            this.type = 'cactus';
+            
+            // Определяем конкретный подтип: 0=Small, 1=Large, 2=Group
+            const subtype = Math.floor(Math.random() * 3);
+            this.cactusSubtype = subtype;
+
+            if (subtype === 0) { // Одиночный Малый
+                this.w = 16;
+                this.h = 24;
+                this.y = 102; // Позиция на земле
+            } else if (subtype === 1) { // Одиночный Большой
+                this.w = 18;
+                this.h = 30;
+                this.y = 96;  // Чуть выше
+            } else { // Группа из двух малых
+                this.w = 26;  // Шире
+                this.h = 24;
+                this.y = 102;
+            }
+        }
+    }
+
+    // Вспомогательная функция рисования ОДНОГО кактуса с фиксированными пропорциями
+    drawSingleCactusSprite(ctx, x, y, h) {
+        // Ствол
+        ctx.fillRect(x + 5, y, 6, h);
+        // Левый отросток (вертикальная часть)
+        ctx.fillRect(x, y + 6, 4, h - 10);
+        ctx.fillRect(x + 4, y + 6, 2, 4); // перемычка
+        // Правый отросток (вертикальная часть)
+        ctx.fillRect(x + 12, y + 8, 4, h - 14);
+        ctx.fillRect(x + 10, y + 8, 2, 4); // перемычка
+    }
+
+    draw() {
+        ctx.fillStyle = '#535353';
+        if (this.type === 'cactus') {
+            if (this.cactusSubtype === 0) {
+                // Малый
+                this.drawSingleCactusSprite(ctx, this.x, this.y, 24);
+            } else if (this.cactusSubtype === 1) {
+                // Большой
+                this.drawSingleCactusSprite(ctx, this.x, this.y, 30);
+            } else {
+                // Группа: рисуем два малых кактуса рядом
+                // Первый
+                this.drawSingleCactusSprite(ctx, this.x, this.y, 24);
+                // Второй (сдвигаем координату X)
+                this.drawSingleCactusSprite(ctx, this.x + 10, this.y, 24);
+            }
+        } else if (this.type === 'bird') {
+            // Анимированный птеродактиль (без изменений)
+            ctx.fillRect(this.x, this.y + 4, this.w, 4); // тело
+            ctx.fillRect(this.x + 12, this.y, 6, 4); // голова
+            if (gameFrame % 8 === 0) this.wingToggle = !this.wingToggle;
+            if (this.wingToggle) {
+                ctx.fillRect(this.x + 6, this.y - 6, 4, 10); // крыло вверх
+            } else {
+                ctx.fillRect(this.x + 6, this.y + 4, 4, 10); // крыло вниз
+            }
+        }
+    }
+    update() {
+        this.x -= gameSpeed;
+    }
+}
+
+function formatScore(num) {
+    return String(Math.floor(num)).padStart(5, '0');
+}
+
+// Сброс состояния
+function resetGame() {
+    obstacles = [];
+    clouds = [];
+    score = 0;
+    gameSpeed = 5.5;
+    isGameOver = false;
+    dino.y = 100;
+    dino.vy = 0;
+}
+
+// Контроллеры ввода
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') {
+        e.preventDefault();
+        if (isGameOver) resetGame();
+        else dino.jump();
+    }
+});
+
+function animate() {
+    requestAnimationFrame(animate);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!isGameOver) gameFrame++;
+
+// 1. Отрисовка рельефной пиксельной земли
+    ctx.strokeStyle = '#535353';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 122);
+    ctx.lineTo(600, 122);
+    ctx.stroke();
+    
+    // Плавный и ненавязчивый песок
+    ctx.fillStyle = '#dcdcdc'; // Сделали цвет песка светлее, чтобы он сливался с фоном
+    for (let i = 0; i < 700; i += 150) { // Сделали частицы более редкими
+        // Отвязали от скорости игры (0.15 - очень медленно) и добавили Math.floor (нет мерцания)
+        let offset = Math.floor(gameFrame * 0.15) % 150; 
+        ctx.fillRect(i - offset + 20, 126, 3, 2); // Сделали высоту 2px вместо 1px
+        ctx.fillRect(i - offset + 80, 128, 5, 2);
+    }
+
+    // 2. Генерация и обновление облаков
+    if (gameFrame % 140 === 0 && !isGameOver) clouds.push(new Cloud());
+    for (let i = clouds.length - 1; i >= 0; i--) {
+        clouds[i].update();
+        clouds[i].draw();
+        if (clouds[i].x < -50) clouds.splice(i, 1);
+    }
+
+    // 3. Вывод очков в стиле оригинального ретро-автомата
+    ctx.fillStyle = '#535353';
+    ctx.font = "10px 'Press Start 2P'";
+    ctx.fillText(`HI ${formatScore(highScore)}  ${formatScore(score)}`, 380, 25);
+
+    if (!isGameOver) {
+        dino.update();
+        
+        // Генерация препятствий с динамической плотностью
+        if (gameFrame % Math.floor(100 - (gameSpeed * 3)) === 0 || obstacles.length === 0) {
+            obstacles.push(new Obstacle());
+        }
+
+        // Постепенное нарастание сложности
+        gameSpeed += 0.0012;
+        score += 0.15; // скорость набора очков
+    } else {
+        // Ретро-экран окончания игры
+        ctx.fillStyle = '#535353';
+        ctx.font = "12px 'Press Start 2P'";
+        ctx.fillText("G A M E   O V E R", 210, 65);
+        ctx.font = "7px 'Press Start 2P'";
+        ctx.fillText("Naciśnij SPACJĘ aby powtórzyć", 175, 90);
+    }
+
+    // 4. Обновление, отрисовка и коллизии препятствий
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        obstacles[i].update();
+        obstacles[i].draw();
+
+        // Проверка столкновений по классическому алгоритму AABB с небольшим зазором (хитбоксом) для честности игры
+        if (
+            dino.x + 2 < obstacles[i].x + obstacles[i].w &&
+            dino.x + dino.w - 2 > obstacles[i].x &&
+            dino.y + 2 < obstacles[i].y + obstacles[i].h &&
+            dino.y + dino.h > obstacles[i].y + 2
+        ) {
+            isGameOver = true;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('dino_arcade_high', highScore);
+            }
+        }
+
+        if (obstacles[i].x < -50) obstacles.splice(i, 1);
+    }
+
+    dino.draw();
+}
+
+// Первый пуск двигателя игры
+animate();
+</script>
+</body>
+</html>

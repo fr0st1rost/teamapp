@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeamFlow - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#FAFBFC] text-gray-800 min-h-screen font-sans">
+    <div class="flex items-center justify-center min-h-screen">
+        <div class="bg-white p-8 rounded-lg shadow-lg w-96 border border-gray-200">
+            <h2 class="text-2xl font-bold mb-6 text-center text-blue-600">TeamFlow</h2>
+            <form onsubmit="handleLogin(event)">
+                <input type="text" id="username" placeholder="Email" required class="w-full mb-4 p-3 rounded bg-gray-50 border border-gray-300 focus:border-blue-500 focus:outline-none">
+                <input type="password" id="password" placeholder="Hasło" required class="w-full mb-6 p-3 rounded bg-gray-50 border border-gray-300 focus:border-blue-500 focus:outline-none">
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded transition shadow-sm">Zaloguj się</button>
+            </form>
+            <p id="loginError" class="text-red-500 text-sm mt-4 text-center hidden">Błąd autoryzacji</p>
+        </div>
+    </div>
+    
+    <script src="/js/config.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+</body>
+</html>

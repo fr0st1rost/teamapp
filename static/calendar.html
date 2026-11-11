@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeamFlow - Kalendarz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .fc-event { border: none; border-radius: 6px; padding: 2px 4px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: transform 0.1s;}
+        .fc-event:hover { transform: scale(1.02); z-index: 50; }
+    </style>
+</head>
+<body class="bg-[#FAFBFC] text-gray-800 min-h-screen font-sans flex flex-col">
+
+    <nav class="bg-white p-4 shadow-sm flex justify-between items-center border-b border-gray-200">
+        <div class="flex items-center gap-8">
+            <h1 class="text-xl font-bold text-blue-600 flex items-center gap-2">TeamFlow</h1>
+            <div class="hidden md:flex gap-4 text-sm font-medium text-gray-600">
+                <a href="/" class="hover:text-blue-600 transition">Zadania</a>
+                <a href="/calendar.html" class="text-blue-600 font-bold border-b-2 border-blue-600 pb-1">Kalendarz</a>
+                <a href="/raport.html" class="hover:text-blue-600 transition">Raporty AI</a>
+            </div>
+        </div>
+        <button onclick="logout()" class="text-sm text-gray-600 hover:text-red-600 font-semibold transition">Wyloguj</button>
+    </nav>
+
+    <div class="flex-1 p-6 flex flex-col h-[calc(100vh-73px)]">
+        <div class="bg-white w-full h-full rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+            
+            <div class="p-4 border-b border-gray-200 flex flex-wrap justify-between items-center bg-slate-50 gap-4">
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex flex-col">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Okres planowania</label>
+                        <select id="daysRange" class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:border-blue-500">
+                            <option value="1">1 Dzień</option>
+                            <option value="3">3 Dni</option>
+                            <option value="7" selected>1 Tydzień</option>
+                        </select>
+                    </div>
+
+                    <div class="flex flex-col">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Profil produktywności</label>
+                        <select id="prodMode" class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:border-blue-500">
+                            <option value="morning">Skupienie rano (09:00 - 13:00)</option>
+                            <option value="evening">Skupienie po południu (14:00 - 18:00)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="clearCalendar()" class="bg-white hover:bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg text-sm font-semibold transition">
+                        Czyść siatkę
+                    </button>
+                    <button id="rescheduleBtn" onclick="rescheduleAI()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition flex items-center gap-2">
+                        Optymalizuj AI
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 p-4 overflow-hidden">
+                <div id="calendar" class="h-full"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="taskModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden transform transition-all">
+            <div class="p-5 border-b border-gray-100 flex justify-between items-start bg-slate-50">
+                <div>
+                    <span id="modalPriority" class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"></span>
+                    <h3 id="modalTitle" class="text-lg font-bold text-gray-900 mt-2"></h3>
+                </div>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <h4 class="text-xs font-bold text-gray-400 uppercase">Opis zadania</h4>
+                    <p id="modalDesc" class="text-sm text-gray-600 mt-1 whitespace-pre-line"></p>
+                </div>
+                <div class="flex justify-between items-center pt-2 border-t border-gray-100 text-xs text-gray-500">
+                    <div>Czas: <span id="modalTime" class="font-semibold text-gray-700"></span> min</div>
+                </div>
+            </div>
+            <div class="p-4 bg-slate-50 border-t border-gray-100 flex justify-end">
+                <button onclick="closeModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-semibold transition">
+                    Zamknij
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="dinoModal" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-md flex flex-col items-center justify-center z-[100] p-4">
+        <div class="relative bg-[#f7f7f7] p-4 pt-6 rounded-2xl shadow-2xl flex flex-col items-center border border-gray-300">
+            
+            <button onclick="stopDinoGame()" class="absolute -top-3 -right-3 bg-white border border-gray-300 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold shadow-md transition z-10">
+                &times;
+            </button>
+
+            <iframe id="dinoFrame" src="" width="620" height="160" class="border-0 overflow-hidden rounded-lg"></iframe>
+            
+            <div class="mt-3 flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-gray-100 shadow-sm">
+                <div class="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <span class="text-xs font-bold text-gray-600 tracking-wide uppercase">Ollama optymalizuje harmonogram...</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/config.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/calendar.js"></script>
+</body>
+</html>
